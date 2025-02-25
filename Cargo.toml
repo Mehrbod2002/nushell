@@ -223,6 +223,8 @@ multipart-rs = { workspace = true }
 serde_json = { workspace = true }
 simplelog = "0.12"
 time = "0.3"
+signal-hook = "0.3.17"
+ctrl-z = "0.1.0"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 # Our dependencies don't use OpenSSL on Windows

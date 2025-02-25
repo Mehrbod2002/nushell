@@ -32,7 +32,7 @@ use nu_protocol::{
 use nu_std::load_standard_library;
 use nu_utils::perf;
 use run::{run_commands, run_file, run_repl};
-use signals::ctrlc_protection;
+use signals::ctrl_protection;
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 /// Get the directory where the Nushell executable is located.
@@ -84,7 +84,7 @@ fn main() -> Result<()> {
     }
 
     // TODO: make this conditional in the future
-    ctrlc_protection(&mut engine_state);
+    ctrl_protection(&mut engine_state);
 
     // Begin: Default NU_LIB_DIRS, NU_PLUGIN_DIRS
     // Set default NU_LIB_DIRS and NU_PLUGIN_DIRS here before the env.nu is processed. If

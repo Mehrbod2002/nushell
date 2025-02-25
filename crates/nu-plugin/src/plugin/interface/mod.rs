@@ -122,7 +122,10 @@ impl EngineInterfaceManager {
                 stream_id_sequence: Sequence::default(),
                 engine_call_subscription_sender: subscription_tx,
                 writer: Box::new(writer),
-                signals: Signals::new(Arc::new(AtomicBool::new(false))),
+                signals: Signals::new(
+                    Arc::new(AtomicBool::new(false)),
+                    Arc::new(AtomicBool::new(false)),
+                ),
                 signal_handlers: Handlers::new(),
             }),
             protocol_info_mut,
@@ -342,6 +345,7 @@ impl InterfaceManager for EngineInterfaceManager {
                 match action {
                     SignalAction::Interrupt => self.state.signals.trigger(),
                     SignalAction::Reset => self.state.signals.reset(),
+                    SignalAction::Pause => self.state.signals.trigger_pause(),
                 }
                 self.state.signal_handlers.run(action);
                 Ok(())

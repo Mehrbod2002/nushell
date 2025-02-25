@@ -254,7 +254,10 @@ fn bench_eval_interleave(n: i32) -> impl IntoBenchmarks {
 
 fn bench_eval_interleave_with_interrupt(n: i32) -> impl IntoBenchmarks {
     let mut engine = setup_engine();
-    engine.set_signals(Signals::new(Arc::new(AtomicBool::new(false))));
+    engine.set_signals(Signals::new(
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(AtomicBool::new(false)),
+    ));
     let stack = Stack::new();
     bench_command(
         &format!("eval_interleave_with_interrupt_{n}"),

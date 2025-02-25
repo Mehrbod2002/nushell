@@ -1,41 +1,42 @@
 use crate::{ShellError, Span};
+use serde::{Deserialize, Serialize};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
 
-use serde::{Deserialize, Serialize};
-
 /// Used to check for signals to suspend or terminate the execution of Nushell code.
 ///
-/// For now, this struct only supports interruption (ctrl+c or SIGINT).
+/// Supports interruption (Ctrl+C or SIGINT) and pausing (Ctrl+Z or SIGTSTP).
 #[derive(Debug, Clone)]
 pub struct Signals {
-    signals: Option<Arc<AtomicBool>>,
+    pub interrupt: Option<Arc<AtomicBool>>, // Tracks Ctrl+C (SIGINT)
+    pub pause: Option<Arc<AtomicBool>>,     // Tracks Ctrl+Z (SIGTSTP)
 }
 
 impl Signals {
     /// A [`Signals`] that is not hooked up to any event/signals source.
     ///
-    /// So, this [`Signals`] will never be interrupted.
-    pub const EMPTY: Self = Signals { signals: None };
+    /// This [`Signals`] will never be interrupted or paused.
+    pub const EMPTY: Self = Signals {
+        interrupt: None,
+        pause: None,
+    };
 
-    /// Create a new [`Signals`] with `ctrlc` as the interrupt source.
+    /// Create a new [`Signals`] with `ctrlc` and `ctrlz` as signal sources.
     ///
-    /// Once `ctrlc` is set to `true`, [`check`](Self::check) will error
-    /// and [`interrupted`](Self::interrupted) will return `true`.
-    pub fn new(ctrlc: Arc<AtomicBool>) -> Self {
+    /// Once `ctrlc` is set to `true`, [`check`](Self::check) will error.
+    /// If `ctrlz` is set to `true`, [`paused`](Self::paused) will return `true`.
+    pub fn new(ctrlc: Arc<AtomicBool>, ctrlz: Arc<AtomicBool>) -> Self {
         Self {
-            signals: Some(ctrlc),
+            interrupt: Some(ctrlc),
+            pause: Some(ctrlz),
         }
     }
 
     /// Create a [`Signals`] that is not hooked up to any event/signals source.
     ///
-    /// So, the returned [`Signals`] will never be interrupted.
-    ///
-    /// This should only be used in test code, or if the stream/iterator being created
-    /// already has an underlying [`Signals`].
+    /// So, the returned [`Signals`] will never be interrupted or paused.
     pub const fn empty() -> Self {
         Self::EMPTY
     }
@@ -51,43 +52,70 @@ impl Signals {
             Err(ShellError::Interrupted { span })
         }
 
+        #[inline]
+        #[cold]
+        fn pause_error(span: Span) -> Result<(), ShellError> {
+            Err(ShellError::SuspendedByUser { span: Some(span) })
+        }
+
         if self.interrupted() {
             interrupt_error(span)
+        } else if self.paused() {
+            println!("paused");
+            pause_error(span)
         } else {
             Ok(())
         }
     }
 
-    /// Triggers an interrupt.
+    /// Triggers an interrupt (e.g., when Ctrl+C is pressed).
     pub fn trigger(&self) {
-        if let Some(signals) = &self.signals {
-            signals.store(true, Ordering::Relaxed);
+        if let Some(interrupt) = &self.interrupt {
+            interrupt.store(true, Ordering::SeqCst);
         }
     }
 
     /// Returns whether an interrupt has been triggered.
     #[inline]
     pub fn interrupted(&self) -> bool {
-        self.signals
+        self.interrupt
             .as_deref()
-            .is_some_and(|b| b.load(Ordering::Relaxed))
+            .is_some_and(|b| b.load(Ordering::Acquire))
+    }
+
+    /// Triggers a pause (e.g., when Ctrl+Z is pressed).
+    pub fn trigger_pause(&self) {
+        if let Some(pause) = &self.pause {
+            pause.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// Returns whether a pause has been triggered.
+    #[inline]
+    pub fn paused(&self) -> bool {
+        self.pause
+            .as_deref()
+            .is_some_and(|b| b.load(Ordering::Acquire))
+    }
+
+    /// Resets both interrupt and pause signals.
+    pub fn reset(&self) {
+        if let Some(interrupt) = &self.interrupt {
+            interrupt.store(false, Ordering::Relaxed);
+        }
+        if let Some(pause) = &self.pause {
+            pause.store(false, Ordering::Relaxed);
+        }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.signals.is_none()
-    }
-
-    pub fn reset(&self) {
-        if let Some(signals) = &self.signals {
-            signals.store(false, Ordering::Relaxed);
-        }
+        self.interrupt.is_none() && self.pause.is_none()
     }
 }
 
-/// The types of things that can be signaled. It's anticipated this will change as we learn more
-/// about how we'd like signals to be handled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SignalAction {
     Interrupt,
     Reset,
+    Pause,
 }

@@ -1123,6 +1123,13 @@ pub enum ShellError {
         span: Span,
     },
 
+    /// An attempt to handle SIGTSTP to suspend the process
+    #[error("Operation suspended by user")]
+    SuspendedByUser {
+        #[label("This operation was suspended")]
+        span: Option<Span>,
+    },
+
     /// An attempt to run a command marked for constant evaluation lacking the const. eval.
     /// implementation.
     ///
